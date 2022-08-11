@@ -5,6 +5,8 @@ import csv
 from Mediapipe_Data_Class import *
 
 data = Hand_Data_Collection()
+count = 0
+data_count = 0
 
 # For webcam input:
 cap = cv2.VideoCapture(0)
@@ -21,8 +23,12 @@ while True:
     landmark_list = data.Relative_to_Wrist(hand_landmarks)
     landmark_array = data.Convert_to_1D(landmark_list)
     normalised_array = data.Normalise_Data(landmark_array)
-    class_num = data.Class_Num(key)
-    data.Save_to_CSV(normalised_array, class_num)
+    #class_num = data.Class_Num(key)
+    if count % 2 == 0:
+        data.Save_to_CSV(normalised_array, 13)
+        data_count += 1
+        print(data_count)
+    count += 1
 
     cv2.imshow('MediaPipe Hands', cv2.flip(img, 1))
     

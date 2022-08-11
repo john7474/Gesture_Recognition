@@ -30,8 +30,6 @@ model.summary()
 cp_callback = tf.keras.callbacks.ModelCheckpoint(
     model_save_path, verbose=1, save_weights_only=False)
 
-es_callback = tf.keras.callbacks.EarlyStopping(patience=20, verbose=1)
-
 model.compile(
     optimizer='adam',
     loss='sparse_categorical_crossentropy',
@@ -41,13 +39,13 @@ model.compile(
 model.fit(
     X_train,
     y_train,
-    epochs=1000,
-    batch_size=128,
+    epochs=10000,
+    batch_size=200,
     validation_data=(X_test, y_test),
-    callbacks=[cp_callback, es_callback]
+    callbacks=[cp_callback]
 )
 
-val_loss, val_acc = model.evaluate(X_test, y_test, batch_size=128)
+val_loss, val_acc = model.evaluate(X_test, y_test, batch_size=64)
 
 model = tf.keras.models.load_model(model_save_path)
 

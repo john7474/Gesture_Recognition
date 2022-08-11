@@ -1,31 +1,32 @@
 import mediapipe as mp
 import cv2
 import numpy as np
-import tensorflow as tf
+import pickle
+import time
 
 class Gesture_Classifier:
-    def __init__(self, mode=False, maxHands=1, model_complex=0, detectionCon=0.5,trackCon=0.5, model_path='gesture_recognition_model.tflite', num_threads=1):
+    def __init__(self, mode=False, maxHands=1, model_complex=0, detectionCon=0.75,trackCon=0.5, model_path='gesture_recognition_model.tflite', num_threads=1):
 
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_hands = mp.solutions.hands
 
         self.hands = self.mp_hands.Hands(max_num_hands=maxHands, min_detection_confidence=detectionCon, min_tracking_confidence=trackCon)
 
-        self.interpreter = tf.lite.Interpreter(model_path=model_path, num_threads=num_threads)
-
-        self.interpreter.allocate_tensors()
-        self.input_details = self.interpreter.get_input_details()
-        self.output_details = self.interpreter.get_output_details()
+        with open('model.pkl','rb') as f:
+            self.svm = pickle.load(f)
 
         self.img = []
         self.point_list = []
-        self.GestureAvg = -1
-        self.GestureCount = 0
         self.prevGesture = -1
         self.count = 1
-        self.gestureList = ['Stop', 'Go', '', 1, 2, 3, 4, 5, 0,
+        self.gestureList = ['Stop', 'Go', 1, 2, 3, 4, 5, 0,
                             'Left', 'Right', 'Forward', 'Backwards',
-                            'Rotate', 'Get', '']
+                            'Rotate', 'Get']
+        self.gestureCommand = []
+        self.getFlag = False
+        self.prevCommand = -1
+        self.timeCount = 0
+        self.recordedGesture = -1
         
     def Draw_Hands(self, img, draw=True):
         self.img = img
@@ -90,39 +91,54 @@ class Gesture_Classifier:
         result_index = -1
 
         if self.results.multi_hand_landmarks:
-            input_details_tensor_index = self.input_details[0]['index']
-            self.interpreter.set_tensor(
-                input_details_tensor_index,
-                np.array([landmark_list], dtype=np.float32))
-            self.interpreter.invoke()
-
-            output_details_tensor_index = self.output_details[0]['index']
-
-            result = self.interpreter.get_tensor(output_details_tensor_index)
-
-            result_index = np.argmax(np.squeeze(result))
+            data = np.array([landmark_list])
+            result_index = self.svm.predict(data)
 
         return result_index
 
     def Result_Average(self, gestureID):
-        if gestureID != self.prevGesture:
-            self.GestureCount += gestureID
-            self.count += 1
-            if self.count % 51 == 0:
-                self.GestureAvg = int(self.GestureCount/50)
-                self.count = 1
-                self.GestureCount = 0
-                if self.prevGesture != self.GestureAvg and self.GestureAvg != -1:
-                    self.prevGesture = self.GestureAvg
-                    gesture = self.Get_Gesture_Name(self.GestureAvg)
-                    print(gesture)
-                    return gesture
+        if self.results.multi_hand_landmarks:
+            if gestureID != self.prevGesture:
+                self.prevGesture = gestureID
+                self.timeCount = time.time()
+                
+            else:
+                if gestureID != -1 and gestureID != self.recordedGesture:
+                    if time.time() - self.timeCount >= 1:
+                        self.timeCount = time.time()
+                        self.recordedGesture = gestureID
+                        gesture = self.Get_Gesture_Name(int(gestureID))
+                        #print(gesture)
+                        return gesture
+        
         return -1
             
     def Get_Gesture_Name(self, gestureID):
         return self.gestureList[gestureID]
 
+    def Gesture_Command(self, gesture):
+        if gesture == 'Get':
+            self.getFlag = True
+        elif gesture == 'Go' and self.getFlag == True:
+            self.getFlag = False
+            if self.gestureCommand != []:
+                data = map(str, self.gestureCommand)
+                data = list(data)
+                print(data)
+                self.gestureCommand = []
+                self.prevCommand = -1
 
-
-
+        if self.getFlag == True and gesture != -1 and gesture != 'Get':
+            if gesture != self.prevCommand:
+                if (self.prevCommand == 'Forward' or self.prevCommand == 'Backwards'):
+                    if type(gesture) == int:
+                        self.gestureCommand.append(gesture)
+                        self.prevCommand = gesture
+                elif type(self.prevCommand) == int and type(gesture) == int:
+                    temp = int(str(self.gestureCommand[-1]) + str(gesture))
+                    self.gestureCommand[-1] = temp
+                    self.prevCommand = gesture
+                else:
+                    self.gestureCommand.append(gesture)
+                    self.prevCommand = gesture
                 
